@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title> Flip Streak </title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background: linear-gradient(to top, #d2b48c 40%, #87ceeb 100%);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      align-items: center;
+      overflow: hidden;
+      margin: 0;
+    }
+
+    h1 {
+      position: absolute;
+      top: 20px;
+      color: #333;
+      text-shadow: 1px 1px 2px #fff;
+    }
+
+    .table {
+      width: 100%;
+      height: 300px;
+      background: #8b5a2b;
+      box-shadow: inset 0 6px 20px rgba(0,0,0,0.4);
+      position: absolute;
+      bottom: 0;
+      z-index: 1;
+    }
+
+    #coin {
+      width: 150px;
+      height: 150px;
+      perspective: 1000px;
+      position: relative;
+      z-index: 2;
+    }
+
+    .coin-inner {
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      transform-style: preserve-3d;
+    }
+
+    .side {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2rem;
+      font-weight: bold;
+      color: white;
+      backface-visibility: hidden;
+      box-shadow: inset -4px -4px 10px rgba(0,0,0,0.4), 4px 4px 10px rgba(0,0,0,0.5);
+    }
+
+    .heads {
+      background: radial-gradient(circle at 30% 30%, gold, goldenrod);
+      transform: rotateX(0deg);
+    }
+
+    .tails {
+      background: radial-gradient(circle at 30% 30%, silver, gray);
+      transform: rotateX(180deg);
+    }
+
+    button {
+      padding: 12px 25px;
+      font-size: 1.2rem;
+      cursor: pointer;
+      margin-top: 20px;
+      border: none;
+      border-radius: 8px;
+      background: #333;
+      color: white;
+      transition: background 0.2s;
+      z-index: 2;
+    }
+    button:disabled {
+      background: #777;
+      cursor: not-allowed;
+    }
+    button:hover:enabled {
+      background: #555;
+    }
+
+    select {
+      margin-top: 15px;
+      padding: 8px 12px;
+      font-size: 1rem;
+      border-radius: 6px;
+      border: 1px solid #333;
+      z-index: 2;
+    }
+
+    .stats {
+      margin-top: 20px;
+      padding: 15px 25px;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.8);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      z-index: 2;
+    }
+
+    @keyframes flipUpHeads {
+      0%   { transform: translateY(0) rotateX(0deg); }
+      50%  { transform: translateY(-250px) rotateX(720deg); }
+      80%  { transform: translateY(0) rotateX(1440deg); }
+      90%  { transform: translateY(-20px) rotateX(1440deg); }
+      100% { transform: translateY(0) rotateX(1440deg); }
+    }
+
+    @keyframes flipUpTails {
+      0%   { transform: translateY(0) rotateX(0deg); }
+      50%  { transform: translateY(-250px) rotateX(720deg); }
+      80%  { transform: translateY(0) rotateX(1620deg); }
+      90%  { transform: translateY(-20px) rotateX(1620deg); }
+      100% { transform: translateY(0) rotateX(1620deg); }
+    }
+
+    .animate-heads {
+      animation: flipUpHeads 2s ease-out forwards;
+    }
+
+    .animate-tails {
+      animation: flipUpTails 2s ease-out forwards;
+    }
+  </style>
+</head>
+<body>
+  <h1>Coin Flip Streak </h1>
+
+  <div id="coin">
+    <div class="coin-inner" id="coin-inner">
+      <div class="side heads">H</div>
+      <div class="side tails">T</div>
+    </div>
+  </div>
+
+  <button id="flip-btn">Flip Coin</button>
+  
+  <select id="chance-select"></select>
+  
+  <div class="stats">
+    <p>Current heads streak: <span id="streak">0</span></p>
+    <p>Best heads streak: <span id="best">0</span></p>
+  </div>
+
+  <div class="table"></div>
+
+  <audio id="flip-sound" src="flip.mp3" preload="auto"></audio>
+  <audio id="heads-sound" src="heads.mp3" preload="auto"></audio>
+
+  <script>
+    const coin = document.getElementById("coin-inner");
+    const flipBtn = document.getElementById("flip-btn");
+    const streakEl = document.getElementById("streak");
+    const bestEl = document.getElementById("best");
+    const chanceSelect = document.getElementById("chance-select");
+
+    const flipSound = document.getElementById("flip-sound");
+    const headsSound = document.getElementById("heads-sound");
+
+    let flipping = false;
+    let currentMode = "50"; // default
+
+    // Fill dropdown (5% to 50%)
+    for (let i = 5; i <= 50; i += 5) {
+      const option = document.createElement("option");
+      option.value = i;
+      option.textContent = i + "% Heads Chance";
+      if (i === 50) option.selected = true;
+      chanceSelect.appendChild(option);
+    }
+
+    // Load streaks from localStorage
+    let streakData = JSON.parse(localStorage.getItem("streakData")) || {};
+    if (!streakData[currentMode]) streakData[currentMode] = { streak: 0, best: 0 };
+
+    updateUI();
+
+    chanceSelect.addEventListener("change", () => {
+      currentMode = chanceSelect.value;
+      if (!streakData[currentMode]) streakData[currentMode] = { streak: 0, best: 0 };
+      updateUI();
+    });
+
+    function updateUI() {
+      const data = streakData[currentMode];
+      streakEl.textContent = data.streak;
+      bestEl.textContent = data.best;
+    }
+
+    function flipCoin() {
+      if (flipping) return;
+      flipping = true;
+      flipBtn.disabled = true;
+
+      coin.classList.remove("animate-heads", "animate-tails");
+      void coin.offsetWidth;
+
+      flipSound.currentTime = 0;
+      flipSound.play();
+
+      const chance = parseInt(currentMode) / 100;
+      const flip = Math.random() < chance ? "Heads" : "Tails";
+
+      if (flip === "Heads") {
+        coin.classList.add("animate-heads");
+      } else {
+        coin.classList.add("animate-tails");
+      }
+
+      setTimeout(() => {
+        const data = streakData[currentMode];
+        if (flip === "Heads") {
+          data.streak++;
+          if (data.streak > data.best) data.best = data.streak;
+          headsSound.currentTime = 0;
+          headsSound.play();
+        } else {
+          data.streak = 0;
+        }
+
+        streakEl.textContent = data.streak;
+        bestEl.textContent = data.best;
+
+        // Save to localStorage
+        localStorage.setItem("streakData", JSON.stringify(streakData));
+
+        flipping = false;
+        flipBtn.disabled = false;
+      }, 2000);
+    }
+
+    flipBtn.addEventListener("click", flipCoin);
+    document.addEventListener("keydown", (event) => {
+      if (event.code === "Space") {
+        event.preventDefault();
+        flipCoin();
+      }
+    });
+  </script>
+</body>
+</html>
